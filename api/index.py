@@ -193,7 +193,8 @@ def public(meta, ranks=None):
     fields = ("id", "slug", "title", "course", "status", "percent", "eta_seconds", "stage_started", "error",
               "error_detail", "created", "finished", "warnings")
     return {**{f: meta.get(f) for f in fields}, "warnings": meta.get("warnings") or [],
-            "has_slides": bool(meta.get("slides")), "queue_position": (ranks or {}).get(meta["id"])}
+            "has_slides": bool(meta.get("slides")), "queue_position": (ranks or {}).get(meta["id"]),
+            "timeline": meta.get("timeline")}
 
 
 @app.get("/api/lessons")
@@ -264,8 +265,9 @@ def lesson_detail(lesson_id: int):
     checks = json.loads(r2.get_text(key(lesson_id, "checks.json"), "{}"))
     items = [{**item, "checked": bool(checks.get(item["stamp"]))} for item in notes.unclear_items(note)]
     ranks = positions(all_lessons(r2)) if meta["status"] == "queued" else {}
+    analysis = r2.get_text(key(lesson_id, "analysis.json"))
     return {**public(meta, ranks), "note": note, "unclear": items, "transcript": r2.get_text(key(lesson_id, "transcript.txt")),
-            "worker_online": worker_online(r2)}
+            "analysis": json.loads(analysis) if analysis else None, "worker_online": worker_online(r2)}
 
 
 class NoteBody(BaseModel):
