@@ -18,6 +18,7 @@ cat > "$PLIST" <<PLISTEOF
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>30</integer>
+  <key>ProcessType</key><string>Interactive</string>
   <key>StandardOutPath</key><string>$APP_DIR/dashboard/logs/isci.log</string>
   <key>StandardErrorPath</key><string>$APP_DIR/dashboard/logs/isci.log</string>
 </dict></plist>

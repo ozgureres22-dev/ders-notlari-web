@@ -57,7 +57,7 @@ function formatDate(ts) {
 function progressView(lesson) {
   const box = el("div", { class: "progress", "data-testid": "progress" });
   if (lesson.status === "queued") {
-    box.append(el("div", { class: "muted", "data-testid": "stage-text" }, `Sırada, ${lesson.queue_position || 1}. iş. Önündeki iş bitince başlayacak.`));
+    box.append(el("div", { class: "muted", "data-testid": "stage-text" }, (lesson.queue_position > 1 ? `Sırada, ${lesson.queue_position}. iş. Önündeki iş bitince başlayacak.` : "Sırada. Birazdan başlayacak.")));
     return box;
   }
   const failedAt = lesson.status === "failed";
@@ -71,7 +71,7 @@ function progressView(lesson) {
   if (lesson.status === "transcribing") {
     const percent = lesson.percent ?? 0;
     box.append(el("div", { class: "bar" }, el("div", { style: `width:${percent}%` })));
-    box.append(el("div", { class: "muted", "data-testid": "stage-text" }, `%${percent.toLocaleString("tr-TR")} · ${formatEta(lesson.eta_seconds)}`));
+    box.append(el("div", { class: "muted", "data-testid": "stage-text" }, percent < 5 ? `%${percent.toLocaleString("tr-TR")} · süre hesaplanıyor` : `%${percent.toLocaleString("tr-TR")} · ${formatEta(lesson.eta_seconds)}`));
   } else if (lesson.status === "converting" || lesson.status === "writing" || lesson.status === "verifying") {
     box.append(el("div", { class: "bar indeterminate" }, el("div")));
     const text = { writing: "Claude notu yazıyor. Uzun derslerde birkaç dakika sürebilir.", verifying: "Not, ayrı bir Claude oturumunda kaynaklarla karşılaştırılıyor." }[lesson.status] || "Ses hazırlanıyor.";
