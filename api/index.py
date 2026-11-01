@@ -10,7 +10,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -43,7 +43,9 @@ def store():
 
 
 def normalize(password):
-    return re.sub(r"[\s\-]", "", str(password or "")).lower()
+    # Dosyadan satirin tamami ("3. abcd-...") kopyalansa da calissin.
+    text = re.sub(r"^\s*\d+[.)]\s*", "", str(password or ""))
+    return re.sub(r"[\s\-]", "", text).lower()
 
 
 def entries():
@@ -85,6 +87,27 @@ async def guard(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+class RestoreRoute:
+    """Vercel her istegi /api/index olarak iletir, asil yol __route parametresinde gelir (bkz. vercel.json).
+    Yol, oturum kontrolunden once geri yazilir: kontrol her zaman gercek yola bakar."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            pairs = parse_qsl(scope.get("query_string", b"").decode(), keep_blank_values=True)
+            route = next((v for k, v in pairs if k == "__route"), None)
+            if route is not None:
+                path = "/api/" + route.lstrip("/")
+                scope = {**scope, "path": path, "raw_path": quote(path).encode(),
+                         "query_string": urlencode([(k, v) for k, v in pairs if k != "__route"]).encode()}
+        await self.inner(scope, receive, send)
+
+
+app.add_middleware(RestoreRoute)
 
 
 class LoginBody(BaseModel):
