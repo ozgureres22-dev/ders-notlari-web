@@ -782,7 +782,7 @@ function mlpView(lesson) {
   }
   update();
   return el("section", { class: "viz-card nn-card", "data-testid": "chart-mlp" }, el("h2", {}, "Regression network"),
-    el("p", { class: "viz-lead" }, `All ${data.w.length} weights, trained on this lecture. ΔAICc ${data.daicc.toLocaleString("en-US")} against the best model.`),
+    el("p", { class: "viz-lead" }, `All ${data.w.length} weights, trained on this lecture. ${data.daicc == null ? "Too few sections for AICc." : `ΔAICc ${data.daicc.toLocaleString("en-US")} against the best model.`}`),
     el("div", { class: "nn-controls" }, slider), readout, chart);
 }
 
@@ -818,8 +818,8 @@ function regressionView(lesson) {
   const short = data.sections.filter((section) => section.short);
   if (short.length) card.append(el("ul", { class: "viz-list", "data-testid": "short-sections" }, short.map((section) => el("li", {}, stampButton(clock(section.t), clock(section.t), true), ` ${section.title} looks short. Compare with the audio; this is not proof of an error.`))));
   card.append(chart, el("ul", { class: "viz-legend inline" }, models.curves.map((curve, index) => el("li", {},
-    el("span", { class: "key-swatch", style: `background:${TOPIC_COLORS[index % TOPIC_COLORS.length]}` }), `${modelName(curve.name)}`, el("span", { class: "muted" }, ` ΔAICc ${curve.daicc.toLocaleString("en-US")}`)))));
-  card.append(tableView("Model comparison", ["Model", "ΔAICc", "ΔBIC", "LOO error"], models.table.map((row) => [modelName(row.model), String(row.aicc), String(row.bic), row.loo == null ? "n/a" : String(row.loo)])));
+    el("span", { class: "key-swatch", style: `background:${TOPIC_COLORS[index % TOPIC_COLORS.length]}` }), `${modelName(curve.name)}`, el("span", { class: "muted" }, curve.daicc == null ? " ΔAICc n/a" : ` ΔAICc ${curve.daicc.toLocaleString("en-US")}`)))));
+  card.append(tableView("Model comparison", ["Model", "ΔAICc", "ΔBIC", "LOO error"], models.table.map((row) => [modelName(row.model), row.aicc == null ? "n/a" : String(row.aicc), row.bic == null ? "n/a" : String(row.bic), row.loo == null ? "n/a" : String(row.loo)])));
   return card;
 }
 

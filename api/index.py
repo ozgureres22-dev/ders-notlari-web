@@ -258,6 +258,17 @@ def lesson_ready(lesson_id: int):
     return public(meta)
 
 
+def finite(value):
+    """Eski analizlerdeki NaN ve sonsuz degerler yanitin JSON'unu bozmasin."""
+    if isinstance(value, float):
+        return value if value == value and abs(value) != float("inf") else None
+    if isinstance(value, dict):
+        return {k: finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [finite(v) for v in value]
+    return value
+
+
 @app.get("/api/lessons/{lesson_id}")
 def lesson_detail(lesson_id: int):
     r2 = store()
@@ -268,7 +279,7 @@ def lesson_detail(lesson_id: int):
     ranks = positions(all_lessons(r2)) if meta["status"] == "queued" else {}
     analysis = r2.get_text(key(lesson_id, "analysis.json"))
     return {**public(meta, ranks), "note": note, "unclear": items, "transcript": r2.get_text(key(lesson_id, "transcript.txt")),
-            "analysis": json.loads(analysis) if analysis else None, "worker_online": worker_online(r2)}
+            "analysis": finite(json.loads(analysis)) if analysis else None, "worker_online": worker_online(r2)}
 
 
 class NoteBody(BaseModel):
