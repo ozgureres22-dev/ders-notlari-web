@@ -4,6 +4,11 @@ APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LABEL="com.dersnotlari.isci"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
+# Eski surec kapanmadan yeniden kurulursa launchd "Input/output error" verir.
+for _ in {1..30}; do
+  launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || break
+  sleep 1
+done
 if [[ "$1" == "--kaldir" ]]; then rm -f "$PLIST"; echo "Isci kaldirildi."; exit 0; fi
 [[ -f "$APP_DIR/web_ayar.json" ]] || { echo "HATA: web_ayar.json yok. Once web/kurulum.py"; exit 1; }
 mkdir -p "$APP_DIR/dashboard/logs" "$HOME/Library/LaunchAgents"
