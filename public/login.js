@@ -8,10 +8,10 @@ $("form").addEventListener("submit", async (event) => {
   try {
     const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: $("password").value }) });
     if (response.ok) { location.replace("/"); return; }
-    $("message").textContent = (await response.json().catch(() => ({}))).detail || "Giriş yapılamadı.";
+    $("message").textContent = (await response.json().catch(() => ({}))).detail || "Could not sign in.";
     $("password").select();
   } catch (_) {
-    $("message").textContent = "Sunucuya ulaşılamadı.";
+    $("message").textContent = "Could not reach the server.";
   }
   $("submit").disabled = false;
 });

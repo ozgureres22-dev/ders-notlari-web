@@ -34,7 +34,7 @@ def claude_binary():
         return override
     found = shutil.which("claude", path=f"{Path.home() / '.local/bin'}:/opt/homebrew/bin:/usr/local/bin:{os.environ.get('PATH', '')}")
     if not found:
-        raise NoteError("Claude Code bulunamadı. Terminalde kurulu olduğunu kontrol et, sonra Tekrar dene.")
+        raise NoteError("Claude Code was not found. Check the installation, then retry.")
     return found
 
 
@@ -42,14 +42,14 @@ def explain_failure(text):
     """Claude'un ham hata metnini kullanicinin anlayacagi cumleye cevirir."""
     low = text.lower()
     if "usage credits" in low or "credit balance" in low:
-        return "Bu model ek kredi istiyor. Ayarlardaki model planına dahil değil."
+        return "This model needs extra credit and is not in the plan."
     if re.search(r"usage limit|limit reached|hit your|rate.?limit|too many requests|out of (extra )?usage|\b429\b", low):
-        return "Claude kullanım limitin doldu. Limit yenilendikten sonra Tekrar dene. Ses yeniden yazıya dökülmez."
+        return "Claude usage limit reached. Retry after it resets; audio is not transcribed again."
     if re.search(r"not logged in|/login|please run|authentication|invalid api key|unauthorized|\b401\b", low):
-        return "Claude oturumu açık değil. Terminalde claude yazıp giriş yap, sonra Tekrar dene."
+        return "Claude is not signed in. Run claude in a terminal to sign in, then retry."
     if re.search(r"overloaded|\b5\d\d\b|connection|network|timed? ?out|fetch failed|enotfound", low):
-        return "Claude servisine ulaşılamadı. İnternet bağlantını kontrol edip Tekrar dene."
-    return "Claude notu yazarken hata verdi. Tekrar dene. Sorun sürerse ayrıntıya bak."
+        return "Could not reach Claude. Check the connection, then retry."
+    return "Claude failed while writing the note. Please retry."
 
 
 def build_prompt(transcript, slides_text):
@@ -67,40 +67,68 @@ def clean_note(text):
         text = fenced.group(1).strip()
     start = re.search(r"^#{1,6} ", text, re.M)
     if not start:
-        raise NoteError("Claude geçerli bir not döndürmedi. Tekrar dene.", text[:2000])
+        raise NoteError("Claude did not return a valid note. Please retry.", text[:2000])
     text = text[start.start():]
     # Ters tirnak icindeki damgalar tiklanamaz ve kontrol listesini bozar.
     text = re.sub(r"`(\[(?:UNCLEAR @ )?\d+:\d\d\])`", r"\1", text)
     missing = [s for s in REQUIRED_SECTIONS if not re.search(rf"^##\s+{re.escape(s)}\s*$", text, re.M)]
     if missing:
-        raise NoteError("Not eksik geldi, kesilmiş olabilir. Tekrar dene.", "Eksik bölümler: " + ", ".join(missing))
+        raise NoteError("The note is incomplete and may have been cut off. Please retry.", "Missing sections: " + ", ".join(missing))
     return text + "\n"
 
 
-NOTE_WARNING_PREFIXES = ("Transkriptte olmayan", "Listede olmayan", "Not transkripte", "Kaydın %", "Doğrulama", "Kaynaklarda geçmeyen")
+NOTE_WARNING_PREFIXES = ("[UNCLEAR]", "The note is very short", "Verification", "Numbers or names", "Transkriptte olmayan", "Listede olmayan", "Not transkripte", "Kaydın %", "Doğrulama", "Kaynaklarda geçmeyen")
+
+
+LEGACY = (
+    (re.compile(r"^Kaydın %(\d+) kadarı düşük güvenli.*"), lambda m: f"{m[1]}% of the recording was transcribed with low confidence. Check names, numbers and claims against the audio."),
+    (re.compile(r"^Kaynaklarda geçmeyen sayı veya isim var, kontrol et: (.*)"), lambda m: f"Numbers or names not found in the sources: {m[1]}"),
+    (re.compile(r"^Transkriptte olmayan \[UNCLEAR\] zaman damgaları var: (.*)"), lambda m: f"[UNCLEAR] timestamps not in the transcript: {m[1]}"),
+    (re.compile(r"^Listede olmayan \[UNCLEAR\] yerleri var: (.*)"), lambda m: f"[UNCLEAR] passages missing from the list: {m[1]}"),
+    (re.compile(r"^Not transkripte göre çok kısa.*"), lambda m: "The note is very short for this transcript. Content may be missing."),
+    (re.compile(r"^Doğrulama tamamlanamadı.*"), lambda m: "Verification did not finish, so the note was not fully checked against the sources. Rewrite the note to try again."),
+    (re.compile(r"^(PDF|DOCX) üretilemedi\."), lambda m: f"{m[1]} could not be created."),
+    (re.compile(r"^Yazıya dökme başarısız.*"), lambda m: "Transcription failed. Please retry."),
+    (re.compile(r"^Beklenmeyen bir hata.*"), lambda m: "An unexpected error occurred. Please retry."),
+    (re.compile(r"^Claude kullanım limitin.*"), lambda m: "Claude usage limit reached. Retry after it resets; audio is not transcribed again."),
+    (re.compile(r"^Claude (notu|bir saat|geçerli|oturumu|servisine|Code (bulunamadı|başlatılamadı)|.*[ğüşıöçİ])"), lambda m: "Claude failed while writing the note. Please retry."),
+    (re.compile(r"^Not (eksik|uzunluk).*"), lambda m: "The note is incomplete and may have been cut off. Please retry."),
+    (re.compile(r"^Sessizlik filtresi.*"), lambda m: "No speech was found in this recording. It may be silent or too noisy."),
+    (re.compile(r"^Ses dosyası okunamadı.*"), lambda m: "The audio file could not be read. It may be corrupt or unsupported."),
+)
+
+
+def english_message(text):
+    """Eski derslerde kayitli Turkce uyari ve hatalari ekranda Ingilizce gosterir."""
+    if not text:
+        return text
+    for pattern, render in LEGACY:
+        match = pattern.match(text)
+        if match:
+            return render(match)
+    return text
 
 
 def note_warnings(note, transcript, slides_text=""):
     warnings = []
     numbers, names = untraceable_terms(note, transcript, slides_text)
     if numbers or names:
-        warnings.append("Kaynaklarda geçmeyen sayı veya isim var, kontrol et: " + ", ".join(numbers + names))
+        warnings.append("Numbers or names not found in the sources: " + ", ".join(numbers + names))
     lines = re.findall(r"^\[\d+:\d\d\]( ⚠)?", transcript, re.M)
     flagged = sum(1 for mark in lines if mark)
     if lines and flagged / len(lines) >= LOW_CONFIDENCE_WARN_RATIO:
-        warnings.append(f"Kaydın %{round(100 * flagged / len(lines))} kadarı düşük güvenli yazıya döküldü. "
-                        "Not akıcı görünse de isim, sayı ve iddiaları sesle karşılaştır.")
+        warnings.append(f"{round(100 * flagged / len(lines))}% of the recording was transcribed with low confidence. Check names, numbers and claims against the audio.")
     stamps = set(re.findall(r"^\[(\d+:\d\d)\]", transcript, re.M))
     invented = sorted({s for s in UNCLEAR.findall(note) if s not in stamps})
     if invented:
-        warnings.append("Transkriptte olmayan [UNCLEAR] zaman damgaları var: " + ", ".join(invented))
+        warnings.append("[UNCLEAR] timestamps not in the transcript: " + ", ".join(invented))
     head, _, tail = note.partition("## Unclear Passages")
     unlisted = sorted(set(UNCLEAR.findall(head)) - set(UNCLEAR.findall(tail)))
     if unlisted:
-        warnings.append("Listede olmayan [UNCLEAR] yerleri var: " + ", ".join(unlisted))
+        warnings.append("[UNCLEAR] passages missing from the list: " + ", ".join(unlisted))
     spoken = len(re.findall(r"\w+", transcript))
     if spoken > 300 and len(re.findall(r"\w+", note)) < spoken * 0.2:
-        warnings.append("Not transkripte göre çok kısa. Atlanan içerik olabilir, kontrol et.")
+        warnings.append("The note is very short for this transcript. Content may be missing.")
     return warnings
 
 
@@ -115,14 +143,14 @@ def run_claude(prompt, system_prompt, on_process=lambda p: None):
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, encoding="utf-8", env=env, cwd=tempfile.gettempdir(), start_new_session=True)
     except OSError as exc:
-        raise NoteError("Claude Code başlatılamadı. Kurulumunu kontrol et, sonra Tekrar dene.", str(exc))
+        raise NoteError("Claude Code could not start. Check the installation, then retry.", str(exc))
     on_process(proc)
     try:
         out, err = proc.communicate(prompt, timeout=NOTE_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         os.killpg(proc.pid, signal.SIGKILL)
         proc.communicate()
-        raise NoteError("Claude bir saat içinde yanıt vermedi. Tekrar dene.")
+        raise NoteError("Claude did not respond within an hour. Please retry.")
     finally:
         on_process(None)
 
@@ -136,7 +164,7 @@ def run_claude(prompt, system_prompt, on_process=lambda p: None):
         raw = (result + "\n" + err).strip() or json.dumps(data)[:2000]
         raise NoteError(explain_failure(raw), raw[:2000])
     if data.get("stop_reason") == "max_tokens":
-        raise NoteError("Not uzunluk sınırına takılıp kesildi. Tekrar dene.", "stop_reason=max_tokens")
+        raise NoteError("The note hit the length limit and was cut off. Please retry.", "stop_reason=max_tokens")
     return result
 
 
@@ -183,6 +211,12 @@ def corrections_text(note):
     return " ".join(row[2] for row in rows if len(row) > 2)
 
 
+DEMONYMS = {"english": ("england",), "british": ("britain",), "french": ("france",), "german": ("germany",), "american": ("america",),
+            "italian": ("italy",), "spanish": ("spain",), "russian": ("russia",), "chinese": ("china",), "japanese": ("japan",),
+            "austrian": ("austria",), "european": ("europe",), "dutch": ("netherlands", "holland"), "turkish": ("turkey", "türkiye"),
+            "roman": ("rome",), "greek": ("greece",), "swiss": ("switzerland",), "scottish": ("scotland",), "irish": ("ireland",)}
+
+
 def untraceable_terms(note, transcript, slides_text=""):
     """Modelsiz kontrol: notta olup kaynaklarda ve duzeltme tablosunda olmayan sayi ve isimler."""
     body = split_body(note)[0]
@@ -195,7 +229,8 @@ def untraceable_terms(note, transcript, slides_text=""):
     # Cumle basi olmayan buyuk harfli kelimeler. Cumle basindaki sozcukler ozel isim sayilmaz.
     for match in re.finditer(r"(?<=[a-z,;:)] )[A-ZÀ-Þ][\w'’-]+", body):
         word = re.sub(r"['’]s$", "", match.group())
-        if word.lower() not in source:
+        lower = word.lower()
+        if lower not in source and not any(root in source for root in DEMONYMS.get(lower, ())):
             names.add(word)
     return numbers, sorted(names)
 
@@ -204,13 +239,13 @@ def parse_findings(text):
     """Dogrulayicinin yanitindan bulgulari cikarir. Bozuk yanit sessizce 'sorun yok' sayilmaz."""
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end < 0:
-        raise NoteError("Doğrulama yanıtı okunamadı.", text[:2000])
+        raise NoteError("The verification reply could not be read.", text[:2000])
     try:
         findings = json.loads(text[start:end + 1])["findings"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise NoteError("Doğrulama yanıtı okunamadı.", f"{exc}: {text[:2000]}")
+        raise NoteError("The verification reply could not be read.", f"{exc}: {text[:2000]}")
     if not isinstance(findings, list):
-        raise NoteError("Doğrulama yanıtı okunamadı.", text[:2000])
+        raise NoteError("The verification reply could not be read.", text[:2000])
     return [f for f in findings if isinstance(f, dict) and str(f.get("quote", "")).strip()]
 
 

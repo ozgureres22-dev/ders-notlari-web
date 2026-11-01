@@ -1,24 +1,25 @@
 <!doctype html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Giriş · Ders Notları</title>
+<title>Sign in · Lecture Notes</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="login-page">
 <form class="card login" id="form" data-testid="login-form">
   <div>
-    <h1>Ders Notları</h1>
-    <p class="muted">Özel alan. Yalnızca şifresi olanlar girebilir.</p>
+    <h1>Lecture Notes</h1>
+    <p class="muted">Private. Password required.</p>
   </div>
-  <label class="field">Şifre
+  <label class="field">Password
     <input type="password" id="password" data-testid="password" autocomplete="current-password" autofocus required>
   </label>
   <div class="login-msg bad" id="message" data-testid="login-message" role="status"></div>
-  <button class="primary" id="submit" data-testid="login-submit">Giriş yap</button>
+  <button class="primary" id="submit" data-testid="login-submit">Sign in</button>
 </form>
-<script src="giris.js"></script>
+<script src="login.js"></script>
 </body>
 </html>
