@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Giriş · Ders Notları</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+<form class="card login" id="form" data-testid="login-form">
+  <div>
+    <h1>Ders Notları</h1>
+    <p class="muted">Özel alan. Yalnızca şifresi olanlar girebilir.</p>
+  </div>
+  <label class="field">Şifre
+    <input type="password" id="password" data-testid="password" autocomplete="current-password" autofocus required>
+  </label>
+  <div class="login-msg bad" id="message" data-testid="login-message" role="status"></div>
+  <button class="primary" id="submit" data-testid="login-submit">Giriş yap</button>
+</form>
+<script src="giris.js"></script>
+</body>
+</html>
