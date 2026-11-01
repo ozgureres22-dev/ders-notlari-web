@@ -151,6 +151,7 @@ function refreshCourseOptions() {
   if (list) list.replaceChildren(...knownCourses.map((course) => el("option", { value: course })));
 }
 
+let authReady = Promise.resolve();
 let directUpload = false; // Sitede dosyalar sunucudan gecmeden depolamaya gider.
 
 function afterUpload() {
@@ -188,7 +189,10 @@ async function uploadDirect(button, status) {
   }
 }
 
-function upload(button, status) {
+async function upload(button, status) {
+  // Sayfa yeni acildiysa yukleme yolu henuz bilinmiyor olabilir: once ogrenilir.
+  button.disabled = true;
+  await authReady;
   if (directUpload) return uploadDirect(button, status);
   const form = new FormData();
   form.append("audio", draft.audio);
@@ -1440,7 +1444,7 @@ function route() {
 window.addEventListener("hashchange", route);
 route();
 
-fetch("/api/auth/status").then((r) => r.json()).then(({ enabled, direct_upload }) => {
+authReady = fetch("/api/auth/status").then((r) => r.json()).then(({ enabled, direct_upload }) => {
   directUpload = Boolean(direct_upload);
   const button = document.getElementById("logout");
   button.hidden = !enabled;
