@@ -20,8 +20,11 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+const OFFLINE = "No connection to the site. Check your internet and try again.";
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  let response;
+  try { response = await fetch(path, options); } catch (_) { throw new Error(OFFLINE); }
   // Sayfa giriş ekranına gidiyor: bekleyen iş hata göstermesin.
   if (response.status === 401) { location.replace("/login.html"); return new Promise(() => {}); }
   if (!response.ok) {
@@ -151,8 +154,20 @@ function refreshCourseOptions() {
   if (list) list.replaceChildren(...knownCourses.map((course) => el("option", { value: course })));
 }
 
-let authReady = Promise.resolve();
-let directUpload = false; // Sitede dosyalar sunucudan gecmeden depolamaya gider.
+// Sitede dosyalar sunucudan geçmeden depolamaya gider. Yol yalnızca sunucu söyleyince bilinir;
+// durum isteği aksarsa dosya yanlış yoldan gönderilmez, istek yeniden denenir.
+let authInfo = null;
+async function loadAuth() {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch("/api/auth/status");
+      if (response.ok) { authInfo = await response.json(); return authInfo; }
+    } catch (_) { /* yeniden denenir */ }
+    if (attempt < 3) await wait(attempt * 1000);
+  }
+  throw new Error(OFFLINE);
+}
+const uploadPath = async () => Boolean((authInfo || await loadAuth()).direct_upload);
 
 function afterUpload() {
   draft = { audio: null, slides: null, title: "", course: "" };
@@ -164,15 +179,26 @@ function afterUpload() {
   refreshList();
 }
 
-function putFile(url, file, status, label) {
+function putOnce(url, file, status, label) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) status.textContent = `Uploading ${label.toLowerCase()} ${Math.round(e.loaded / e.total * 100)}%`; };
-    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error("Upload failed.")));
-    xhr.onerror = () => reject(new Error("Could not reach storage."));
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(Object.assign(new Error(`Storage refused the upload (${xhr.status}).`), { final: true })));
+    xhr.onerror = () => reject(new Error("Could not reach storage. Check your internet and try again."));
     xhr.send(file);
   });
+}
+
+async function putFile(url, file, status, label) {
+  // Mobil ağda bağlantı kısa süre koparsa yükleme baştan denenir.
+  for (let attempt = 1; ; attempt += 1) {
+    try { return await putOnce(url, file, status, label); } catch (error) {
+      if (error.final || attempt === 3) throw error;
+      status.textContent = `Connection dropped, retrying (${attempt + 1}/3)...`;
+      await wait(attempt * 2000);
+    }
+  }
 }
 
 async function uploadDirect(button, status) {
@@ -190,10 +216,11 @@ async function uploadDirect(button, status) {
 }
 
 async function upload(button, status) {
-  // Sayfa yeni acildiysa yukleme yolu henuz bilinmiyor olabilir: once ogrenilir.
   button.disabled = true;
-  await authReady;
-  if (directUpload) return uploadDirect(button, status);
+  status.textContent = "";
+  let direct;
+  try { direct = await uploadPath(); } catch (error) { status.textContent = error.message; button.disabled = false; return; }
+  if (direct) return uploadDirect(button, status);
   const form = new FormData();
   form.append("audio", draft.audio);
   if (draft.slides) form.append("slides", draft.slides);
@@ -213,7 +240,7 @@ async function upload(button, status) {
       button.disabled = false;
     }
   };
-  xhr.onerror = () => { status.textContent = "Could not reach the server."; button.disabled = false; };
+  xhr.onerror = () => { status.textContent = "Could not reach the panel. Check that it is running, then try again."; button.disabled = false; };
   xhr.send(form);
 }
 
@@ -1444,8 +1471,7 @@ function route() {
 window.addEventListener("hashchange", route);
 route();
 
-authReady = fetch("/api/auth/status").then((r) => r.json()).then(({ enabled, direct_upload }) => {
-  directUpload = Boolean(direct_upload);
+loadAuth().then(({ enabled }) => {
   const button = document.getElementById("logout");
   button.hidden = !enabled;
   button.onclick = () => fetch("/api/auth/logout", { method: "POST" }).then(() => location.replace("/login.html"));
