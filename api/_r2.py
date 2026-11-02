@@ -3,6 +3,7 @@ import datetime
 import hashlib
 import hmac
 import shutil
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,8 +17,17 @@ def _sign(key, text):
     return hmac.new(key, text.encode(), hashlib.sha256).digest()
 
 
+def _transient(exc):
+    """Ag kopmasi veya R2'nin gecici 5xx hatasi: ayni istek yeniden denenebilir."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code >= 500
+    return isinstance(exc, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
 class R2:
-    def __init__(self, endpoint, bucket, access_key, secret_key, region="auto", now=None):
+    def __init__(self, endpoint, bucket, access_key, secret_key, region="auto", now=None, attempts=1, backoff=2.0):
+        # attempts: Mac iscisi kararsiz agda yeniden dener; Vercel fonksiyonu tek denemede kalir.
+        self.attempts, self.backoff = max(1, attempts), backoff
         self.endpoint, self.bucket = endpoint.rstrip("/"), bucket
         self.access_key, self.secret_key, self.region = access_key, secret_key, region
         self.host = urllib.parse.urlsplit(self.endpoint).netloc
@@ -49,6 +59,15 @@ class R2:
         return f"{self.endpoint}{path}?{query_text}&X-Amz-Signature={signature}"
 
     def _request(self, method, key="", body=None, query=None, extra_headers=None, timeout=60):
+        for attempt in range(1, self.attempts + 1):
+            try:
+                return self._request_once(method, key, body, query, extra_headers, timeout)
+            except Exception as exc:
+                if attempt == self.attempts or not _transient(exc):
+                    raise
+                time.sleep(self.backoff * attempt)
+
+    def _request_once(self, method, key, body, query, extra_headers, timeout):
         query = query or {}
         stamp = self._now().strftime("%Y%m%dT%H%M%SZ")
         headers = {"host": self.host, "x-amz-date": stamp, "x-amz-content-sha256": UNSIGNED, **(extra_headers or {})}
