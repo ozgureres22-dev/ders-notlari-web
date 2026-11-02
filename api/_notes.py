@@ -217,6 +217,11 @@ DEMONYMS = {"english": ("england",), "british": ("britain",), "french": ("france
             "roman": ("rome",), "greek": ("greece",), "swiss": ("switzerland",), "scottish": ("scotland",), "irish": ("ireland",)}
 
 
+def _ism_root(lower, source):
+    """'Protestantism' kaynakta 'Protestant' olarak geciyorsa uydurma sayilmaz. Kisa kokler (real-ism) kabul edilmez."""
+    return lower.endswith("ism") and len(lower) >= 8 and re.search(r"\b" + re.escape(lower[:-3]), source) is not None
+
+
 def untraceable_terms(note, transcript, slides_text=""):
     """Modelsiz kontrol: notta olup kaynaklarda ve duzeltme tablosunda olmayan sayi ve isimler."""
     body = split_body(note)[0]
@@ -230,7 +235,7 @@ def untraceable_terms(note, transcript, slides_text=""):
     for match in re.finditer(r"(?<=[a-z,;:)] )[A-ZÀ-Þ][\w'’-]+", body):
         word = re.sub(r"['’]s$", "", match.group())
         lower = word.lower()
-        if lower not in source and not any(root in source for root in DEMONYMS.get(lower, ())):
+        if lower not in source and not any(root in source for root in DEMONYMS.get(lower, ())) and not _ism_root(lower, source):
             names.add(word)
     return numbers, sorted(names)
 
