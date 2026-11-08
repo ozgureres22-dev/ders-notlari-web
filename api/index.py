@@ -69,7 +69,7 @@ def session_valid(token):
 
 
 # Site sahibinin istegiyle gecici olarak kapali. Acmak icin False yap veya bu commit'i geri al.
-SITE_CLOSED = False
+SITE_CLOSED = True
 
 
 @app.middleware("http")
