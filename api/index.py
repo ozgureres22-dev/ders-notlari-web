@@ -68,8 +68,14 @@ def session_valid(token):
         return False
 
 
+# Site sahibinin istegiyle gecici olarak kapali. Acmak icin False yap veya bu commit'i geri al.
+SITE_CLOSED = True
+
+
 @app.middleware("http")
 async def guard(request: Request, call_next):
+    if SITE_CLOSED:
+        return JSONResponse({"detail": "This site is closed for now."}, status_code=503, headers={"Cache-Control": "no-store"})
     path = request.url.path
     host = request.headers.get("host")
     origin = request.headers.get("origin")

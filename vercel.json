@@ -1,13 +1,44 @@
 {
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index?__route=$1" }],
-  "functions": { "api/index.py": { "maxDuration": 30, "includeFiles": "api/_*.py" } },
-  "headers": [{
-    "source": "/(.*)",
-    "headers": [
-      { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-      { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-      { "key": "Referrer-Policy", "value": "no-referrer" },
-      { "key": "X-Content-Type-Options", "value": "nosniff" }
-    ]
-  }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index?__route=$1"
+    }
+  ],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30,
+      "includeFiles": "api/_*.py"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/((?!closed\\.html$|icon\\.svg$|style\\.css$).*)",
+      "destination": "/closed.html",
+      "permanent": false
+    }
+  ]
 }
