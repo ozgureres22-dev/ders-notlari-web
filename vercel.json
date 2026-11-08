@@ -33,12 +33,5 @@
         }
       ]
     }
-  ],
-  "redirects": [
-    {
-      "source": "/((?!closed\\.html$|icon\\.svg$|style\\.css$).*)",
-      "destination": "/closed.html",
-      "permanent": false
-    }
   ]
 }
